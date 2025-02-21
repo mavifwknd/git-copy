@@ -1,0 +1,17 @@
+{
+  "name": "git",
+  "main": "main.js",
+  "version": "1.0.0",
+  "description": "A simple Git GUI",
+  "scripts": {
+    "start": "electron ."
+  },
+  "packageManager": "yarn@4.4.1",
+  "devDependencies": {
+    "electron": "^34.2.0"
+  },
+  "dependencies": {
+    "fs-extra": "^11.3.0",
+    "simple-git": "^3.27.0"
+  }
+}

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Electron Git Viewer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 text-gray-900 p-4">
+    <div id="app"></div>
+
+    <!-- Import Preact from a CDN -->
+    <script src="https://unpkg.com/preact@latest/dist/preact.umd.js"></script>
+    <script src="https://unpkg.com/preact/hooks/dist/hooks.umd.js"></script>
+    <script>
+      const { h, render } = preact;
+      const { useState, useEffect } = preactHooks;
+      const { ipcRenderer } = require("electron");
+      const path = require("path");
+
+      function App() {
+        const [repoPath, setRepoPath] = useState(null);
+        const [branches, setBranches] = useState([]);
+        const [currentBranch, setCurrentBranch] = useState("");
+        const [commits, setCommits] = useState([]);
+        const [searchTerm, setSearchTerm] = useState("");
+        const [selectedCommits, setSelectedCommits] = useState([]);
+        const [changedFiles, setChangedFiles] = useState([]);
+        const [message, setMessage] = useState("");
+        const [page, setPage] = useState(1);
+        const [hasMore, setHasMore] = useState(true);
+        const limit = 10;
+
+        // Load commit history from the selected repository
+        async function loadCommits(loadMore = false) {
+          const newCommits = await ipcRenderer.invoke("get-commits", {
+            page,
+            limit,
+          });
+
+          if (newCommits.length < limit) {
+            setHasMore(false); // No more commits left to load
+          }
+
+          if (loadMore) {
+            setCommits((prev) => [...prev, ...newCommits]); // Append new commits
+          } else {
+            setCommits(newCommits); // Reset commits
+          }
+        }
+
+        // Handle folder picker
+        async function pickFolder() {
+          const folder = await ipcRenderer.invoke("pick-folder");
+          if (folder) {
+            setRepoPath(folder);
+            setMessage(`Repository set to: ${folder}`);
+            setPage(1);
+            setHasMore(true);
+            await loadBranches();
+            await loadCommits(false);
+          }
+        }
+
+        // Toggle commit selection
+        function toggleCommit(index) {
+          let newSelected = [...selectedCommits];
+
+          if (newSelected.includes(index)) {
+            // If deselecting, remove all commits after it
+            newSelected = newSelected.filter((i) => i < index);
+          } else {
+            // If selecting, ensure it's a consecutive selection
+            const min = Math.min(...newSelected, index);
+            const max = Math.max(...newSelected, index);
+            newSelected = Array.from(
+              { length: max - min + 1 },
+              (_, i) => min + i
+            );
+          }
+
+          setSelectedCommits(newSelected);
+        }
+
+        // Load available branches
+        async function loadBranches() {
+          const branchList = await ipcRenderer.invoke("get-branches");
+          if (branchList.length > 0) {
+            setBranches(branchList);
+            setCurrentBranch(branchList[0]); // Set the first branch as default
+          }
+        }
+
+        // Change branch
+        async function changeBranch(event) {
+          const newBranch = event.target.value;
+          const response = await ipcRenderer.invoke("switch-branch", newBranch);
+          setMessage(response);
+          setCurrentBranch(newBranch);
+          setPage(1);
+          setHasMore(true);
+          await loadCommits(false); // Reload commits for the new branch
+        }
+
+        // Filter commits based on search term (by hash or message)
+        const filteredCommits = commits.filter(
+          (commit) =>
+            commit.hash.includes(searchTerm) ||
+            commit.message.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+
+        // Get changed files for selected commits
+        async function getChangedFiles() {
+          if (selectedCommits.length === 0) {
+            alert("Please select at least one commit.");
+            return;
+          }
+
+          // Ensure valid commit hashes are passed
+          const selectedHashes = selectedCommits
+            .map((index) => commits[index]?.hash)
+            .filter(Boolean);
+
+          if (selectedHashes.length === 0) {
+            alert("Invalid commit selection.");
+            return;
+          }
+
+          const files = await ipcRenderer.invoke(
+            "get-changed-files",
+            selectedHashes
+          );
+          setChangedFiles(files);
+        }
+
+        // Copy files to an output folder (inside app folder as 'copied_files')
+        async function copyFiles() {
+          if (selectedCommits.length === 0) {
+            alert("Please select at least one commit.");
+            return;
+          }
+
+          // Ensure we pass valid commit hashes
+          const selectedHashes = selectedCommits
+            .map((index) => commits[index]?.hash)
+            .filter(Boolean);
+
+          if (selectedHashes.length === 0) {
+            alert("Invalid commit selection.");
+            return;
+          }
+
+          const resultMessage = await ipcRenderer.invoke(
+            "copy-changed-files",
+            selectedHashes
+          );
+          setMessage(resultMessage);
+        }
+
+        useEffect(() => {
+          // Try to load commits on start if repoPath is already set
+          if (repoPath) {
+            loadBranches();
+            loadCommits(false);
+          }
+        }, [repoPath]);
+
+        return h(
+          "div",
+          { class: "max-w-3xl mx-auto bg-white shadow-lg rounded-lg p-4" },
+          h(
+            "div",
+            { class: "flex flex-col gap-2 mb-4" },
+            h(
+              "button",
+              {
+                class:
+                  "bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700",
+                onClick: pickFolder,
+              },
+              "Pick Repository Folder"
+            ),
+            repoPath &&
+              h(
+                "span",
+                { class: "text-sm text-gray-600" },
+                `Current Repo: ${repoPath}`
+              ),
+            h("label", { class: "text-sm font-medium" }, "Select Branch: "),
+            h(
+              "select",
+              {
+                class: "border rounded p-2",
+                onChange: changeBranch,
+                value: currentBranch,
+              },
+              branches.map((branch) => h("option", { value: branch }, branch))
+            )
+          ),
+          h(
+            "div",
+            { class: "mb-4" },
+            h("input", {
+              type: "text",
+              class: "w-full border rounded p-2",
+              placeholder: "Search commits...",
+              value: searchTerm,
+              onInput: (e) => setSearchTerm(e.target.value),
+            })
+          ),
+          h("h2", { class: "text-lg font-semibold mb-2" }, "Commit History"),
+          h(
+            "div",
+            { class: "max-h-96 overflow-y-auto border rounded p-2 bg-gray-50" },
+            filteredCommits.map((commit, index) =>
+              h(
+                "div",
+                {
+                  key: commit.hash,
+                  class: "flex items-center gap-2 p-2 border-b",
+                },
+                h("input", {
+                  type: "checkbox",
+                  class: "w-4 h-4",
+                  checked: selectedCommits.includes(index),
+                  onChange: () => toggleCommit(index),
+                }),
+                h(
+                  "span",
+                  { class: "text-sm font-medium text-gray-700" },
+                  commit.hash.substring(0, 7)
+                ),
+                h("span", { class: "text-sm text-gray-600" }, commit.message),
+                h(
+                  "span",
+                  { class: "text-xs text-gray-400" },
+                  new Date(commit.date).toLocaleString()
+                )
+              )
+            )
+          ),
+          hasMore &&
+            h(
+              "button",
+              {
+                class:
+                  "w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded mt-2",
+                onClick: () => {
+                  setPage((prev) => prev + 1);
+                  loadCommits(true);
+                },
+              },
+              "Load More"
+            ),
+          h(
+            "div",
+            { class: "flex gap-2 mt-4" },
+            h(
+              "button",
+              {
+                class:
+                  "bg-yellow-500 text-white py-2 px-4 rounded-md hover:bg-yellow-600",
+                onClick: getChangedFiles,
+              },
+              "Show Changed Files"
+            ),
+            h(
+              "button",
+              {
+                class:
+                  "bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700",
+                onClick: copyFiles,
+              },
+              "Copy Files"
+            )
+          ),
+          h("h2", { class: "text-lg font-semibold mt-4" }, "Changed Files"),
+          h(
+            "ul",
+            { class: "list-disc pl-4" },
+            changedFiles.map((file) => h("li", { key: file }, file))
+          ),
+          message &&
+            h("div", { class: "mt-4 text-sm text-gray-700 italic" }, message)
+        );
+      }
+
+      render(h(App), document.getElementById("app"));
+    </script>
+  </body>
+</html>
