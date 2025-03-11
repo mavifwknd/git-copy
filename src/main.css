@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  button {
+    @apply border-2 text-xs p-2 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+}
