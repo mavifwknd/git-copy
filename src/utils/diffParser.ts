@@ -48,13 +48,25 @@ export function parseDiff(rawDiff: string): DiffFile[] {
         changes: []
       };
     } 
-    // Skip binary file messages
+    // Skip binary file messages and index lines
     else if (line.includes('Binary files') || line.startsWith('index ')) {
+      continue;
+    }
+    // Skip file mode changes and other metadata
+    else if (line.startsWith('old mode') || line.startsWith('new mode') || 
+             line.startsWith('similarity index') || line.startsWith('rename from') || 
+             line.startsWith('rename to') || line.startsWith('copy from') || 
+             line.startsWith('copy to')) {
       continue;
     }
     // Collect changes for the current file
     else if (currentFile) {
-      currentFile.changes.push(line);
+      // Only include lines that are part of the actual diff content
+      // This includes hunk headers (@@ lines), additions, deletions, and context
+      if (line.startsWith('@@') || line.startsWith('+') || line.startsWith('-') || line.trim() === '' || 
+          (!line.startsWith('+') && !line.startsWith('-') && !line.startsWith('diff'))) {
+        currentFile.changes.push(line);
+      }
     }
   }
 

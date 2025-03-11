@@ -60,7 +60,10 @@ export default function App() {
   const BtnSelector = ({ type }: { type: string }) => {
     const p = project[type as keyof typeof project];
     return (
-      <button onClick={() => openDialog(type)}>
+      <button 
+        onClick={() => openDialog(type)}
+        className="text-left px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded w-full h-full"
+      >
         {p.path ? `${p.path} - ${p.branch}` : `Select ${type}...`}
       </button>
     );
@@ -73,19 +76,26 @@ export default function App() {
 
   return (
     <div className="flex flex-col gap-2 bg-white text-gray-900">
-      <div className="flex flex-col gap-2 p-2">
-        <div className="flex flex-col gap-2">
-          <BtnSelector type="source" />
-          <BtnSelector type="target" />
-          <button 
-            onClick={applyChanges} 
-            disabled={selectedCommits.length === 0 || !project.target.path}
-          >
-            Apply Changes
-          </button>
+      <div className="sticky top-0 p-2 z-10 bg-white">
+        {/* Grid layout for buttons */}
+        <div className="grid grid-cols-[1fr,auto] gap-2 border rounded p-2">
+          <div>
+            <BtnSelector type="source" />
+          </div>
+          <div className="row-span-2 flex justify-center">
+            <button 
+              onClick={applyChanges} 
+              disabled={selectedCommits.length === 0 || !project.target.path}
+              className="h-auto px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded disabled:bg-gray-300 disabled:text-gray-500 whitespace-nowrap"
+            >
+              Apply Changes
+            </button>
+          </div>
+          <div>
+            <BtnSelector type="target" />
+          </div>
         </div>
       </div>
-      <hr />
       <div className="flex flex-col gap-2 p-2">
         {commits.map((commit, index) => (
           <label
@@ -100,7 +110,7 @@ export default function App() {
               className="mt-1"
               onChange={() => toggleCommit(index)}
             />
-            <div className="flex flex-col gap-2 w-full">
+            <div className="flex flex-col flex-1 gap-2">
               <p className="leading-5">
                 <span className="text-md">{commit.message}</span>
                 &nbsp;

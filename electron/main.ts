@@ -33,6 +33,15 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
     },
+    // Set minimum window dimensions to ensure the side-by-side diff view works properly
+    width: 1024,
+    height: 768,
+    minWidth: 900,
+    minHeight: 600,
+    // Center the window
+    center: true,
+    // Set a title for the window
+    title: "Git Diff Viewer"
   });
 
   // Test active push message to Renderer-process.
@@ -125,7 +134,12 @@ ipcMain.handle("changes", async (_, { path = "", commitHash = "" }) => {
 
   const git = simpleGit(path);
   try {
-    const changes = await git.diff([`${commitHash}^!`]);
+    // Using git show --binary instead of git diff
+    const changes = await git.raw([
+      "show",
+      "--binary",
+      commitHash
+    ]);
     return { data: { changes, commitHash } };
   } catch (err) {
     return { error: (err as Error).message };
