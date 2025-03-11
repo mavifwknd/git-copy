@@ -12,7 +12,7 @@ export const DiffViewer = ({ files }: DiffViewerProps) => {
     // Initialize with all files expanded
     const initialState: Record<string, boolean> = {};
     files.forEach(file => {
-      initialState[file.filename] = true;
+      initialState[file.filename] = false;
     });
     return initialState;
   });

@@ -101,11 +101,42 @@ ipcMain.handle("select-folder", async () => {
   };
 });
 
+// Update branch information
+ipcMain.handle("update-branch", async (_, { path = "" }) => {
+  if (!path) return { error: "No repository path provided." };
+
+  const git = simpleGit(path);
+  try {
+    // Check if it's a valid git repository
+    const isRepo = await git.checkIsRepo();
+    if (!isRepo) {
+      return { error: "Not a valid git repository." };
+    }
+
+    // Fetch latest changes from remote
+    await git.fetch(['--all']);
+    
+    // Get current branch information
+    const branch = await git.branchLocal();
+    
+    return {
+      data: {
+        branch: branch.current,
+        updated: true
+      }
+    };
+  } catch (err) {
+    return { error: (err as Error).message };
+  }
+});
+
 ipcMain.handle("commits", async (_, { path = "", page = 1, limit = 20 }) => {
   if (!path) return { data: [] };
 
   const git = simpleGit(path);
   try {
+    // Removed fetch call since we now have a dedicated fetch button
+    
     const skip = (page - 1) * limit;
     const commits = await git.raw([
       "log",
